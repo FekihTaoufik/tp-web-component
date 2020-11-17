@@ -71,11 +71,11 @@ class MediaPlayer extends HTMLElement {
       this.renderSelectedEqualizerType()
     );
 
-    this.addListeners();
+    this.handleListeners();
     this.initAttributes();
   }
   disconnectedCallback() {
-    this.removeListeners();
+    this.handleListeners(true);
   }
   initAttributes() {
     var src = this.getAttribute("src");
@@ -85,58 +85,86 @@ class MediaPlayer extends HTMLElement {
     this.setVolume();
     this.setGain();
   }
-  attributeChangedCallback(attr, oldValue, newValue) {}
+  attributeChangedCallback(attr, oldValue, value) {
+    // volume, current-time, gain, balance, equalize-type
+    switch (attr) {
+      case "volume":
+        this.setVolume(value);
+        break;
+      case "current-time":
+        this.setCurrentTime(value);
+        break;
+      case "equalize-type":
+        this.toggleEqualizerType(value);
+        break;
+      case "gain":
+        this.setGain(value);
+        break;
+      case "balance":
+        this.setBalance(value);
+        break;
+      default:
+        break;
+    }
+  }
 
-  addListeners() {
+  handleListeners(remove = false) {
     const $ = this;
-    $.controls.progress.addEventListener("input", function (e) {
+    let addOrRemoveEventListener =
+      (remove ? "remove" : "add") + "EventListener";
+    $.controls.progress[addOrRemoveEventListener]("input", function (e) {
       $.setCurrentTime(e.target.value);
       if ($.player.paused) $.togglePlay();
     });
-    $.controls.balance.addEventListener("input", function (e) {
+    $.controls.balance[addOrRemoveEventListener]("input", function (e) {
       $.setBalance(e.target.value);
     });
-    $.controls.volume.addEventListener("input", function (e) {
+    $.controls.volume[addOrRemoveEventListener]("input", function (e) {
       $.setVolume(e.target.value);
     });
-    $.controls.gain.addEventListener("input", function (e) {
+    $.controls.gain[addOrRemoveEventListener]("input", function (e) {
       $.setGain(e.target.value);
     });
 
-    $.controls.toggleVizType.addEventListener("click", function (e) {
+    $.controls.toggleVizType[addOrRemoveEventListener]("click", function (e) {
       $.toggleEqualizerType();
     });
-    $.controls.add10sec.addEventListener("click", function (e) {
+    $.controls.add10sec[addOrRemoveEventListener]("click", function (e) {
       $.addPlayTime(10);
     });
-    $.controls.minus10sec.addEventListener("click", function (e) {
+    $.controls.minus10sec[addOrRemoveEventListener]("click", function (e) {
       $.addPlayTime(-10);
     });
-    $.controls.rollback.addEventListener("click", function (e) {
+    $.controls.rollback[addOrRemoveEventListener]("click", function (e) {
       $.rollback();
     });
 
-    $.controls.togglePlay.addEventListener("click", (event) => {
+    $.controls.togglePlay[addOrRemoveEventListener]("click", (event) => {
       $.togglePlay();
     });
-    $.controls.toggleLoop.addEventListener("click", (event) => {
+    $.controls.toggleLoop[addOrRemoveEventListener]("click", (event) => {
       $.toggleLoop();
     });
-    $.player.addEventListener("timeupdate", (event) => {
+    $.player[addOrRemoveEventListener]("timeupdate", (event) => {
       $.updateCurrentTime(event.target.currentTime);
     });
-    $.player.addEventListener("loadedmetadata", (event) => {
+    $.player[addOrRemoveEventListener]("loadedmetadata", (event) => {
       $.controls.progress.max = Math.round($.player.duration);
       $.updateDuration($.player.duration);
     });
   }
-  removeListeners() {}
+  removeListeners() {
+    const $ = this[("toggleVizType", "add10sec")].map(function (c) {
+      $.controls[c].removeListeners("click");
+    });
+  }
 
   generateTemplate() {
     const template = document.createElement("template");
     template.innerHTML = `
     <style>
     #media-player{
+        margin:20px;
         color:white;
         background-color: #2a322a;
         background-image: linear-gradient(315deg, #2a322a 0%, #2f372f 74%);
@@ -250,10 +278,14 @@ class MediaPlayer extends HTMLElement {
     }
   }
   setGain(val = 1) {
+    val = parseFloat(val + "");
+    if (val < 0 || val > 3) throw new Error("Gain provided is not valid");
     this.gainNode.gain.value = val;
     this.controls.gain.setValue(val);
   }
   setVolume(val = this.player.volume) {
+    val = Math.abs(parseFloat(val + ""));
+    if (val > 1) throw new Error("Volume provided is not valid");
     this.player.volume = val;
     this.controls.volume.setValue(val);
   }
@@ -267,6 +299,8 @@ class MediaPlayer extends HTMLElement {
     this.player.loop = !this.player.loop;
   }
   setBalance(val) {
+    val = parseFloat(val + "");
+    if (val > 1 || v < -1) throw new Error("Balance provided is not valid");
     this.audioStereoPanner.pan.value = val;
   }
   updateDuration(val = this.player.duration) {
@@ -277,7 +311,11 @@ class MediaPlayer extends HTMLElement {
     this.controls.currentTime.innerHTML = this.secondsToDuration(val);
     this.controls.progress.setValue(val);
   }
-  setCurrentTime(val) {
+  setCurrentTime(val = 0) {
+    val = Math.abs(parseFloat(val + ""));
+    if (val > this.player.duration)
+      throw new Error("Current time provided is not valid");
+
     this.player.currentTime = val;
     this.updateCurrentTime(val);
   }
@@ -303,7 +341,6 @@ class MediaPlayer extends HTMLElement {
       window.cancelAnimationFrame(this.equalizer.animationId);
       return;
     }
-    console.log("render");
     if (this.equalizer.type == "bar") this.renderBarEqualizer();
     else this.renderWaveEqualizer(() => this.renderSelectedEqualizerType());
   }
@@ -362,9 +399,15 @@ class MediaPlayer extends HTMLElement {
     eq.ctx.lineTo(eq.canvas.width, eq.canvas.height / 2);
     eq.ctx.stroke();
   }
-  toggleEqualizerType() {
-    this.equalizer.type = this.equalizer.type == "bar" ? "wave" : "bar";
+  toggleEqualizerType(val) {
+    val = val.strip().toLowerCase();
+    if (!["bar", "wave"].includes(val))
+      throw new Error("Equalizer type provided not valid");
+    this.equalizer.type = !!val
+      ? val
+      : this.equalizer.type == "bar"
+      ? "wave"
+      : "bar";
   }
 }
-
 window.customElements.define("media-player", MediaPlayer);
