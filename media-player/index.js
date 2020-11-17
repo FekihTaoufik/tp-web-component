@@ -300,7 +300,7 @@ class MediaPlayer extends HTMLElement {
   }
   setBalance(val) {
     val = parseFloat(val + "");
-    if (val > 1 || v < -1) throw new Error("Balance provided is not valid");
+    if (val > 1 || val < -1) throw new Error("Balance provided is not valid");
     this.audioStereoPanner.pan.value = val;
   }
   updateDuration(val = this.player.duration) {
@@ -399,15 +399,13 @@ class MediaPlayer extends HTMLElement {
     eq.ctx.lineTo(eq.canvas.width, eq.canvas.height / 2);
     eq.ctx.stroke();
   }
-  toggleEqualizerType(val) {
-    val = val.strip().toLowerCase();
-    if (!["bar", "wave"].includes(val))
-      throw new Error("Equalizer type provided not valid");
-    this.equalizer.type = !!val
-      ? val
-      : this.equalizer.type == "bar"
-      ? "wave"
-      : "bar";
+  toggleEqualizerType(val = "") {
+    if (!!val) {
+      val = val.trim().toLowerCase();
+      if (!["bar", "wave"].includes(val))
+        throw new Error("Equalizer type provided not valid");
+      this.equalizer.type = val;
+    } else this.equalizer.type = this.equalizer.type == "bar" ? "wave" : "bar";
   }
 }
 window.customElements.define("media-player", MediaPlayer);
