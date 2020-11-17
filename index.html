@@ -1,0 +1,42 @@
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Exemple lecteur multimedia</title>
+    <script src="lib/webaudio-controls.js"></script>
+    <script src="./myComponents/index.js"></script>
+    <script src="./media-player/index.js"></script>
+  </head>
+
+  <body>
+    <!--
+    <H1>ici un lecteur audio pour le MBDS</H1>
+    <audio id="myPlayer" controls="controls">
+        <source src="http://mainline.i3s.unice.fr/mooc/horse.ogg" type="audio/ogg" />
+        <source src="http://mainline.i3s.unice.fr/mooc/horse.mp3" type="audio/mp3" />
+    </audio>
+    <button onclick="player.pause();">Pause</button>
+    <button onclick="player.play();">Play</button>
+    <button onclick="player.currentTime=0;">Retour à zero</button>
+    <br>
+    Volume: 0 <input type="range" min=0 max=1 step=0.1 oninput="player.volume=this.value"> 1
+    <br>
+    <webaudio-knob id="knobVolume" tooltip="Volume:%s" src="./assets/imgs/bouton2.png" sprites="127" value=1 min="0" max="1" step=0.01>
+        Volume</webaudio-knob>
+    <script>
+        let player = document.querySelector("#myPlayer");
+        player.loop = true;
+        player.ontimeupdate = afficheDetails;
+
+        document.querySelector("#knobVolume").addEventListener("input", (event) => {
+            player.volume = event.target.value;
+        });
+
+        function afficheDetails() {
+            console.log("Durée du son = " + player.currentTime);
+        }
+    </script>
+    -->
+    <!-- <my-audioplayer></my-audioplayer> -->
+    <media-player src="./assets/megalovania.mp3"></media-player>
+  </body>
+</html>
