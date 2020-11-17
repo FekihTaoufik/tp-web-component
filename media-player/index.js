@@ -17,18 +17,32 @@ class MediaPlayer extends HTMLElement {
       volumeMeter: this.shadowRoot.querySelector("webaudio-knob[name='vu']"),
       volume: this.shadowRoot.querySelector("webaudio-knob[name='volume']"),
       balance: this.shadowRoot.querySelector("webaudio-knob[name='balance']"),
-      add10sec: this.shadowRoot.querySelector("button[name='add10sec']"),
-      minus10sec: this.shadowRoot.querySelector("button[name='minus10sec']"),
-      rollback: this.shadowRoot.querySelector("button[name='rollback']"),
-      togglePlay: this.shadowRoot.querySelector("button[name='toggle-play']"),
-      toggleLoop: this.shadowRoot.querySelector("button[name='toggle-loop']"),
+      gain: this.shadowRoot.querySelector("webaudio-knob[name='gain']"),
+      add10sec: this.shadowRoot.querySelector(
+        "webaudio-switch[name='add10sec']"
+      ),
+      minus10sec: this.shadowRoot.querySelector(
+        "webaudio-switch[name='minus10sec']"
+      ),
+      rollback: this.shadowRoot.querySelector(
+        "webaudio-switch[name='rollback']"
+      ),
+      togglePlay: this.shadowRoot.querySelector(
+        "webaudio-switch[name='toggle-play']"
+      ),
+      toggleLoop: this.shadowRoot.querySelector(
+        "webaudio-switch[name='toggle-loop']"
+      ),
+      toggleVizType: this.shadowRoot.querySelector(
+        "webaudio-switch[name='toggle-equalizer-type']"
+      ),
     };
-
-    this.addListeners();
-    this.initAttributes();
 
     window.AudioContext = window.AudioContext || window.webkitAudioContext;
     this.audioContext = new AudioContext();
+
+    this.gainNode = this.audioContext.createGain();
+
     this.audioMediaSource = this.audioContext.createMediaElementSource(
       this.player
     );
@@ -36,13 +50,15 @@ class MediaPlayer extends HTMLElement {
     // handling balance
     this.audioStereoPanner = this.audioContext.createStereoPanner();
     this.audioMediaSource.connect(this.audioStereoPanner);
-
+    this.audioMediaSource.connect(this.gainNode);
+    this.gainNode.connect(this.audioContext.destination);
+    this.gainNode.gain.value = 1.5;
     var analyser = this.audioContext.createAnalyser();
-    // handling volume meter
 
     // handling equalizer
     const canvas = this.shadowRoot.querySelector("#equalizer");
     this.equalizer = {
+      type: "bar",
       analyser: analyser,
       canvas: canvas,
       ctx: canvas.getContext("2d"),
@@ -50,8 +66,13 @@ class MediaPlayer extends HTMLElement {
     this.audioStereoPanner.connect(this.audioContext.destination);
     this.audioMediaSource.connect(this.equalizer.analyser);
     this.equalizer.analyser.connect(this.audioContext.destination);
-    this.animateEqualizer();
-    window.requestAnimationFrame(() => this.animateEqualizer());
+    this.renderSelectedEqualizerType();
+    this.equalizer.animationId = window.requestAnimationFrame(() =>
+      this.renderSelectedEqualizerType()
+    );
+
+    this.addListeners();
+    this.initAttributes();
   }
   disconnectedCallback() {
     this.removeListeners();
@@ -62,6 +83,7 @@ class MediaPlayer extends HTMLElement {
     this.player.load();
 
     this.setVolume();
+    this.setGain();
   }
   attributeChangedCallback(attr, oldValue, newValue) {}
 
@@ -77,7 +99,13 @@ class MediaPlayer extends HTMLElement {
     $.controls.volume.addEventListener("input", function (e) {
       $.setVolume(e.target.value);
     });
+    $.controls.gain.addEventListener("input", function (e) {
+      $.setGain(e.target.value);
+    });
 
+    $.controls.toggleVizType.addEventListener("click", function (e) {
+      $.toggleEqualizerType();
+    });
     $.controls.add10sec.addEventListener("click", function (e) {
       $.addPlayTime(10);
     });
@@ -98,7 +126,6 @@ class MediaPlayer extends HTMLElement {
       $.updateCurrentTime(event.target.currentTime);
     });
     $.player.addEventListener("loadedmetadata", (event) => {
-      console.log($.player.duration);
       $.controls.progress.max = Math.round($.player.duration);
       $.updateDuration($.player.duration);
     });
@@ -110,8 +137,9 @@ class MediaPlayer extends HTMLElement {
     template.innerHTML = `
     <style>
     #media-player{
-        background-color: #ffffff;
-        background-image: linear-gradient(315deg, #ffffff 0%, #d7e1ec 74%);
+        color:white;
+        background-color: #2a322a;
+        background-image: linear-gradient(315deg, #2a322a 0%, #2f372f 74%);
         border-radius:10px;
         display:block;
         width:500px;
@@ -121,11 +149,36 @@ class MediaPlayer extends HTMLElement {
         margin-top:15px;
         margin-bottom:15px;
     }
+    #action-btns > span:nth-child(2){
+      text-align:right;
+    }
+    #action-btns > span,#other-controls > span{
+      flex-grow : 1;
+    }
+    #action-btns webaudio-switch{
+      margin : 5px 5px;
+    }
+    #other-controls{
+      align-items: center;
+      text-align: center;
+    }
+    #action-btns,#other-controls{
+      display:flex;
+    }
     #canvas-wrapper{
         border-radius:10px;
         overflow:hidden;
         height:150px;
         margin-bottom:10px;
+        position:relative;
+    }
+    #canvas-wrapper webaudio-switch > .webaudio-switch-body{
+      transform : rotate(90deg);
+    }
+    #canvas-wrapper webaudio-switch{
+      position:absolute;
+      top:5px;
+      right:5px;
     }
     canvas#equalizer{
         width:100%;
@@ -146,6 +199,7 @@ class MediaPlayer extends HTMLElement {
     <div id="media-player">
         <audio></audio>
         <div id="canvas-wrapper">
+          <webaudio-switch width="56" height="56" name="toggle-equalizer-type" src="./assets/imgs/switch_toggle.png" >Wave / Bar</webaudio-switch>
             <canvas id="equalizer"></canvas>
         </div>
         
@@ -157,19 +211,28 @@ class MediaPlayer extends HTMLElement {
                 <span name="current-time">00:00:00</span>/<span name="duration"></span>
             </span>
         </div>
-        <div class="margin-y">
-            <button name="toggle-play">Play</button>
-            <button name="rollback">Retour à zero</button>
-            <button name="add10sec">avancer 10s</button>
-            <button name="minus10sec">reculer 10s</button>
-            <button name="toggle-loop">loop</button>
+        <div class="margin-y" id="action-btns">
+        <span>
+        <webaudio-switch sprites="2" value="1" name="toggle-play" src="./assets/imgs/ob_button.png" >Play</webaudio-switch>
+        <webaudio-switch sprites="1" value="1" name="rollback" src="./assets/imgs/ob_button.png" >Reset</webaudio-switch>
+        <webaudio-switch sprites="2" value="1" name="toggle-loop" src="./assets/imgs/ob_button.png" >Loop</webaudio-switch>
+        </span>
+        <span>
+        <webaudio-switch sprites="1" value="1" name="minus10sec" src="./assets/imgs/ob_button.png" >-10 sec</webaudio-switch>
+        <webaudio-switch sprites="1" value="1" name="add10sec" src="./assets/imgs/ob_button.png" >+10 sec</webaudio-switch>
+        </span>
         </div>
-        <div class="margin-y">
-        <webaudio-knob diameter="60" name="balance" src="./assets/imgs/Vintage_Knob.png" value="0" max="1" min="-1" step="0.01">Left   -   Right</webaudio-knob>
-
-        <webaudio-knob diameter="60" name="volume" tooltip="Volume:%s" src="./assets/imgs/Vintage_Knob.png" min="0" max="1" step="0.01">Volume</webaudio-knob>
-
-        <webaudio-knob name="vu" tooltip="Volume meter :%s" src="./assets/imgs/Vintage_VUMeter_2.png" min="0" max="80" step="0.01">Limit</webaudio-knob>
+        <div class="margin-y" id="other-controls">
+          <span>
+          <webaudio-knob diameter="60" name="balance" src="./assets/imgs/Vintage_Knob.png" value="0" max="1" min="-1" step="0.01">Left   -   Right</webaudio-knob>
+          
+          <webaudio-knob diameter="60" name="volume" tooltip="Volume:%s" src="./assets/imgs/Vintage_Knob.png" min="0" max="1" step="0.01">Volume</webaudio-knob>
+          
+          <webaudio-knob diameter="60" name="gain" tooltip="Gain:%s" src="./assets/imgs/Vintage_Knob.png" min="0" max="3" step="0.01">Gain</webaudio-knob>
+          </span>
+          <span>
+          <webaudio-knob enable="0" name="vu" tooltip="Volume meter :%s" src="./assets/imgs/Vintage_VUMeter_2.png" min="0" max="80" step="0.01">Limit</webaudio-knob>
+          </span>
         </div>
     </div>
     `;
@@ -180,10 +243,15 @@ class MediaPlayer extends HTMLElement {
     if (this.player.paused) {
       this.player.play();
       this.controls.togglePlay.innerText = "Pause";
+      this.renderSelectedEqualizerType();
     } else {
       this.player.pause();
       this.controls.togglePlay.innerText = "Play";
     }
+  }
+  setGain(val = 1) {
+    this.gainNode.gain.value = val;
+    this.controls.gain.setValue(val);
   }
   setVolume(val = this.player.volume) {
     this.player.volume = val;
@@ -197,7 +265,6 @@ class MediaPlayer extends HTMLElement {
   }
   toggleLoop() {
     this.player.loop = !this.player.loop;
-    this.controls.toggleLoop.innerHTML = this.player.loop ? "Loop(on)" : "Loop";
   }
   setBalance(val) {
     this.audioStereoPanner.pan.value = val;
@@ -231,9 +298,18 @@ class MediaPlayer extends HTMLElement {
     }
     return (hours > 0 ? hours + ":" : "") + minutes + ":" + seconds;
   }
-  animateEqualizer() {
+  renderSelectedEqualizerType() {
+    if (this.player.paused) {
+      window.cancelAnimationFrame(this.equalizer.animationId);
+      return;
+    }
+    console.log("render");
+    if (this.equalizer.type == "bar") this.renderBarEqualizer();
+    else this.renderWaveEqualizer(() => this.renderSelectedEqualizerType());
+  }
+  renderBarEqualizer() {
     const eq = this.equalizer;
-    window.requestAnimationFrame(() => this.animateEqualizer());
+
     var fbc_array, bar_count, bar_pos, bar_width, bar_height;
 
     fbc_array = new Uint8Array(eq.analyser.frequencyBinCount);
@@ -256,6 +332,38 @@ class MediaPlayer extends HTMLElement {
     for (const v of fbc_array) sum += v;
 
     this.controls.volumeMeter.setValue(sum / eq.analyser.frequencyBinCount);
+    this.equalizer.animationId = window.requestAnimationFrame(() =>
+      this.renderSelectedEqualizerType()
+    );
+  }
+  renderWaveEqualizer() {
+    this.equalizer.animationId = window.requestAnimationFrame(() =>
+      this.renderSelectedEqualizerType()
+    );
+    const eq = this.equalizer;
+    let fbc_array = new Uint8Array(eq.analyser.frequencyBinCount);
+    eq.analyser.getByteFrequencyData(fbc_array);
+    eq.ctx.clearRect(0, 0, eq.canvas.width, eq.canvas.height);
+    eq.ctx.lineWidth = 1;
+    eq.ctx.strokeStyle = "blue";
+    eq.ctx.beginPath();
+
+    let sliceWidth = eq.canvas.width / 255;
+    let x = 0;
+    for (var i = 0; i < eq.analyser.frequencyBinCount; i++) {
+      var v = fbc_array[i];
+      var y = v;
+      if (i === 0) eq.ctx.moveTo(x, y);
+      else eq.ctx.lineTo(x, y);
+
+      x += sliceWidth;
+    }
+
+    eq.ctx.lineTo(eq.canvas.width, eq.canvas.height / 2);
+    eq.ctx.stroke();
+  }
+  toggleEqualizerType() {
+    this.equalizer.type = this.equalizer.type == "bar" ? "wave" : "bar";
   }
 }
 
